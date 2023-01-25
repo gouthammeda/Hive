@@ -25,6 +25,7 @@ load data local inpath '/data/retail_db/order_items' into table order_items_stag
 select * from order_items_stage limit 10;
 select count(1) from order_items_stage;
 
+--we are using order_items_stage so that ',' delimited file order_items is loaded into default delimited file.
 insert into table order_items select * from order_items_stage;
 dfs -ls hdfs://m01.itversity.com:9000/user/itv000613/db/order_items;
 dfs -tail hdfs://m01.itversity.com:9000/user/itv000613/db/order_items/000000_0;
