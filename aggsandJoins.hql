@@ -2,51 +2,82 @@
 use gouthamkumar_retail;
 hive --database gouthamkumar_retail
 
---writing basic queries:
+--writing basic queries
+drop table orders;
 
+CREATE TABLE orders (
+  order_id STRING COMMENT 'Unique order id',
+  order_date STRING COMMENT 'Date on which order is placed',
+  order_customer_id INT COMMENT 'Customer id who placed the order',
+  order_status STRING COMMENT 'Current status of the order'
+) COMMENT 'Table to save order level details'
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',';
+
+LOAD DATA LOCAL INPATH '/data/retail_db/orders' into table orders;
+
+--select from join where group by(used for aggregations) having(filter on top of aggregated results) order by 
+--once syntax and sematic checks are done for hql then it will get converted into mr(java based jar) job.
+
+--logs will be present in /tmp/training folder 
+
+select * from orders limit 10;
+select order_id,order_customer_id from orders limit 10;
+
+--grouping the order_item_order_id and generating order revenue
 select order_item_order_id,sum(order_item_subtotal) as order_revenue
   from order_items
   group by order_item_order_id
   limit 10;
 
 select order_id,order_customer_id from orders limit 10;
+
+--we are calculating order_item_revenue(income generated from selling the product) for each of the product.
 select order_item_order_id,order_item_product_id,
     order_item_quantity * order_item_product_price as order_item_revenue
      from order_items
      limit 10;
 
+--we are generating another derived column actual_status using case and populating it based on the condition provided
 select o.*,
- CASE WHEN o.order_status IN('COMPLETE','CLOSED') THEN 'COMPLETED'
-      WHEN o.order_status IN('PENDING','PENDING_PAYMENT','PAYMENT_REVIEW','PROCESSING') THEN 'PENDING'
-      ELSE 'OTHER'
+ CASE 
+ WHEN o.order_status IN('COMPLETE','CLOSED') THEN 'COMPLETED'
+ WHEN o.order_status IN('PENDING','PENDING_PAYMENT','PAYMENT_REVIEW','PROCESSING') THEN 'PENDING'
+ ELSE 'OTHER'
  END AS actual_status
 from orders o limit 10;
 
+--using distinct will give total unique values for the column.
 select distinct order_date from orders;
 select distinct order_status from orders;
 select distinct order_item_product_id from order_items;
+--it will return count of distinct values.
 select count(distinct order_date) from orders;
---come back
+--always run distinct when it is really needed as it will trigger the map reduce job but simple select does something like hadoop fs -cat.
 select distinct * from orders limit 10;
 select * from orders limit 10;
---always run distinct when it is really needed.
 
-
+--Filtering data using conditions for string and numbers.
 select * from orders where order_status='CLOSED' limit 10;
 select * from orders where order_status='COMPLETE' limit 10;
-SELECT * FROM ORDERS WHERE order_customer_id = 8827;
+SELECT * FROM orders WHERE order_customer_id = 8827;
 select * from order_items where order_item_quantity >= 2 limit 10;
 select * from order_items where order_item_subtotal >= 100 limit 10;
 select * from orders where order_status !='COMPLETE' limit 10;
 select * from orders where order_status <> 'COMPLETE' limit 10; 
 
+--filter data using boolean operators or & and.
 select * from orders where order_status='COMPLETE' and order_date = '2013-07-25 00:00:00.0' LIMIT 10;
 select COUNT(1) from orders where order_status='COMPLETE' and order_date = '2013-07-25 00:00:00.0';
 select * from orders where order_status='COMPLETE' OR order_date = '2013-07-25 00:00:00.0' LIMIT 10;
+
+--below query returns 23000 records 
 select count(1) from orders where order_status='COMPLETE' OR order_date = '2013-07-25 00:00:00.0';
+--below query returns 22899 records
 select count(1) from orders where order_status='COMPLETE';
+--to validate we write below query which are not complete and orderdate is july 25th equals 101.
 SELECT COUNT(1) FROM ORDERS where order_status <> 'COMPLETE' and order_date = '2013-07-25 00:00:00.0';
 
+--using IN operator instead of or for comapring multiple values within single column
 select * from orders 
  where order_status = 'COMPLETE' or order_status='CLOSED'
  LIMIT 10;
@@ -58,6 +89,11 @@ select * from orders
 SELECT * FROM ORDERS 
  WHERE ORDER_STATUS <> 'COMPLETE' AND ORDER_STATUS <> 'CLOSED'
  LIMIT 10;
+
+--using like operator in where clause.
+select * from orders 
+where order_date like '2014%'
+limit 10;
 
 SELECT ORDER_DATE,COUNT(1) FROM ORDERS 
   WHERE ORDER_DATE LIKE '%-07-%'
@@ -350,7 +386,7 @@ union all
 select order_id,order_date,order_status from orders_2013_09_to_2013_12    
 ) q;
 
-there is no out of box support for intersection and minus 
+--there is no out of box support for intersection and minus 
 
 
 
