@@ -144,11 +144,12 @@ CREATE TABLE orders (
   order_customer_id INT COMMENT 'Customer id who placed the order',
   order_status STRING COMMENT 'Current status of the order'
 ) COMMENT 'Table to save order level details'
-CLUSTERED BY (order_id) into 8 buckets 
+CLUSTERED BY (order_id) 
+into 8 buckets 
 stored as orc
 tblproperties('transactional'='true');
 
---compaction will run to combine small files into 1 large file 
+--compaction will run to combine small delta files into larger files 
 insert into orders values (1,'2013-07-25 00:00:00.0',1000,'COMPLETE');
 insert into orders values (2,'2013-07-25 00:00:00.0',2100,'COMPLETE');
 insert into orders values 
@@ -161,7 +162,6 @@ truncate table orders;
 insert into orders select order_id,order_date,order_customer_id,order_status from orders_part;
 dfs -ls hdfs://m01.itversity.com:9000/user/itv000613/db/orders/delta_0000008_0000008_0000;
 
-
 --Functions
 show functions;
 describe function substr;
@@ -169,6 +169,9 @@ describe function substring;
 
 select current_date;
 select substr('Hello World',1,5);
+
+use gouthamkumar_retail;
+
 create table dual(dummy STRING);
 INSERT into table dual values('X');
 select substr('Hello World',1,5) from dual;
@@ -227,7 +230,7 @@ SELECT date_sub(current_date, 30);
 
 SELECT datediff('2019-03-30', '2017-12-31');
 
-if the date is not available it will give last date of the coming month 
+--if the date is not available it will give last date of the coming month 
 select add_months('2019-01-31',1);
 select add_months('2019-05-31',1);
 describe function add_months;
@@ -247,11 +250,15 @@ select current_timestamp,date_format(current_timestamp,'Y');
 
 select current_timestamp,date_format(current_timestamp,'MM');
 select current_timestamp,date_format(current_timestamp,'dd');
+--It will give the number of days from starting year.
 select current_timestamp,date_format(current_timestamp,'DD');
+
 select current_timestamp,date_format(current_timestamp,'HH');
+--It will give hours 
 select current_timestamp,date_format(current_timestamp,'hh');
 select current_timestamp,date_format(current_timestamp,'mm');
 select current_timestamp,date_format(current_timestamp,'ss');
+--It will extract time in milli seconds 
 select current_timestamp,date_format(current_timestamp,'SS');
 select date_format(current_timestamp,'YYYYMM');
 select date_format(current_timestamp,'YYYYMMdd');
@@ -267,8 +274,11 @@ select year(current_date);
 SELECT month(current_date);
 SELECT weekofyear(current_date);
 SELECT day(current_date);
+--it gives day of month in the date part.
 SELECT dayofmonth(current_date);
 
+-- run this shell command to get epoc -> date '+%s' minutes that are passed since January 1st 1970
+--converts epoch to unixtime
 SELECT from_unixtime(1556662731);
 SELECT to_unix_timestamp('2019-04-30 18:18:51');
 
@@ -279,34 +289,54 @@ SELECT from_unixtime(1556662731, 'YYYY-MM-dd HH:mm:ss');
 SELECT to_unix_timestamp('20190430 18:18:51', 'YYYYMMdd');
 SELECT to_unix_timestamp('20190430 18:18:51', 'YYYYMMdd HH:mm:ss');
 
+--mathematical functions 
 describe function abs;
 select abs(-10);
-SELECT avg(order_item_subtotal) FROM order_items
-WHERE order_item_order_id = 2;
-SELECT round(avg(order_item_subtotal), 2) FROM order_items
-WHERE order_item_order_id = 2;
+SELECT avg(order_item_subtotal) FROM order_items WHERE order_item_order_id = 2;
+SELECT round(193.33, 1);
+--returns before integer in the decimal part.
+select ceil(193.33);
+select floor(193.33);
+select pow(2,3);
+select sqrt(4);
+--returns number between 0 and 1.
+select rand();
 
-select split(current_date,'-')[1];
 describe function split;
+select split(current_date,'-')[1];
+
 select cast(split(current_date,'-')[1] as INT);
 SELECT CONCAT(0,4);
-select cast('0.04' as float);
+select cast('0.04' as FLOAT);
 select cast('0.04' as int);
 
+--handling null values using nvl function
 select 1+NULL;
 DESCRIBE function nvl;
 select nvl(1,0);
 select nvl(NULL,0);
 
+--word count using split to convert them into individual records then explode() is used to split them into individual records then applying group by to get them into word,count format. 
 create table wordcount(s STRING);
-	INSERT INTO wordcount VALUES
-    ('Hello World'),
-    ('How are you'),
-    ('Let us perform the word count'),
-    ('The definition of word count is'),
-    ('to get the count of eah word from this data');
+INSERT INTO wordcount VALUES
+  ('Hello World'),
+  ('How are you'),
+  ('Let us perform the word count'),
+  ('The definition of word count is'),
+  ('to get the count of each word from this data');
 
 select word,count(1)
-  from 
-   (select explode(split(s,' ')) as word from wordcount)q
-   group by word;
+from 
+ (select explode(split(s,' ')) as word from wordcount)q
+ group by word;
+
+
+
+
+
+
+
+
+
+
+
