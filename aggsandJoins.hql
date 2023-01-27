@@ -2,6 +2,9 @@
 use gouthamkumar_retail;
 hive --database gouthamkumar_retail
 
+--we have to understand orders,order_items and products tables
+--In order_items order_item_subtotal = order_item_quantity * order_item_product_price
+
 --writing basic queries
 drop table orders;
 
@@ -95,10 +98,26 @@ select * from orders
 where order_date like '2014%'
 limit 10;
 
+SELECT * FROM ORDERS 
+  WHERE ORDER_DATE LIKE '%-07-%'
+  limit 10;
+--get count of dates for the month of july 
 SELECT ORDER_DATE,COUNT(1) FROM ORDERS 
   WHERE ORDER_DATE LIKE '%-07-%'
   GROUP BY ORDER_DATE;
 
+--come out of shell
+exit;
+
+--aggregation function
+select count(1) from orders;
+select count(distinct order_date) from orders;
+--It will get distinct order_date and order_status 
+select count(distinct order_date,order_status) from orders;
+
+select * from order_items limit 10;
+select * from order_items where order_item_order_id = 2;
+--to use agg functions without group by clause.
 select sum(order_item_subtotal) as order_revenue,
        min(order_item_subtotal) as min_order_item_subtotal,
        max(order_item_subtotal) as max_order_item_subtotal,
@@ -106,6 +125,10 @@ select sum(order_item_subtotal) as order_revenue,
 from order_items
 where order_item_order_id = 2;
 
+--using agg with group_by_key
+-- select group_key1,group_key2,agg1(arg),agg2(arg)
+-- from table_name 
+-- group by group_key1,group_key2;
 select order_item_order_id,
        sum(order_item_subtotal) order_revenue,
        min(order_item_subtotal) min_order_item_subtotal,
@@ -116,24 +139,33 @@ from order_items
 group by order_item_order_id
 limit 10;
 
+--we will get distinct count of order status from orders table for a given order date.
 select order_date,count(distinct order_status) distinct_order_status_count
 from orders
 group by order_date
 limit 10;
 
---shouldn't use the below approach
+--columns in the select clause which are not part of aggregate functions should be in group by clause
+--if there are more fields in group by than in select, results will be misleading it will give one record for each and every order_status which is incorrect.
 select order_date,count(distinct order_status) distinct_order_status_count
 from orders
 group by order_date,order_status
 limit 10;
 
+--select from where group by having order by, if we want to filter after grouping then we have to use having instead 
+--of where clause.limit is the optional keyword in below query  
 select order_item_order_id,sum(order_item_subtotal) as order_revenue
 from order_items
 group by order_item_order_id
 having sum(order_item_subtotal)>=500
 limit 10;
 
+
+--order by is used for global sorting and sort by is used to sort within a key(come back)
+--by default sorting is done in ascending order.
 select * from orders order by order_customer_id limit 10;
+--Here we are using composite sorting which means data will sort by order_customer_id first and 
+--if there are multiple records for a same order_customer_id then they will be sorted by order_date within them.
 select * from orders 
 order by order_customer_id,order_date
 limit 10;
@@ -220,7 +252,7 @@ select t1.*,t2.* from table t1 [OUTER] JOIN table t2
 on t1.id = t2.id
 where filters;
 
--- the relation between orders and order_items is 1 to many meaning each and 
+--the relation between orders and order_items is 1 to many meaning each and 
 --every record in order item has corresponding entry in orders and no record only in order_items but not in orders
 select o.order_id,o.order_date,o.order_status,
     oi.order_item_product_id,oi.order_item_subtotal
