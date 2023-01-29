@@ -31,7 +31,7 @@ dfs -ls hdfs://m01.itversity.com:9000/user/itv000613/db/order_items;
 dfs -tail hdfs://m01.itversity.com:9000/user/itv000613/db/order_items/000000_0;
 
 CREATE TABLE orders (
-  order_id STRING COMMENT 'Unique order id',
+  order_id INT COMMENT 'Unique order id',
   order_date STRING COMMENT 'Date on which order is placed',
   order_customer_id INT COMMENT 'Customer id who placed the order',
   order_status STRING COMMENT 'Current status of the order'
