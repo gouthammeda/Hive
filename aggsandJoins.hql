@@ -161,7 +161,7 @@ having sum(order_item_subtotal)>=500
 limit 10;
 
 
---order by is used for global sorting and sort by is used to sort within a key(come back)
+--order by is used for global sorting and sort by is used to sort within a key
 --by default sorting is done in ascending order.
 select * from orders order by order_customer_id limit 10;
 --Here we are using composite sorting which means data will sort by order_customer_id first and 
@@ -170,10 +170,34 @@ select * from orders
 order by order_customer_id,order_date
 limit 10;
 
+--composite sorting with order_date in descending order.In order by all the sorting is done by one reducer for that key on huge amount of data(rows)
+--so performance can be slow to avoid it we can use sort by key
 select * from orders 
 order by order_customer_id asc, order_date desc
 limit 10;
 
+--hive query Execution life Cycle: 
+--map tasks -> filtering and row level transformations
+--reduce tasks -> aggregations,sorting,reduce side joins
+--map tasks -> shuffle(data will be partitioned into fewer buckets depending on number of reducers used to process it(grouping). Also data will be sorted within each bucket(sorting)) -> reduce tasks 
+
+--1 map(read the order_item_order_id and order_item_subtotal) and reduce task(added all order_item_subtotals for that order_item_order_id to compute revenue) and in shuffle stage data is grouped or distributed with order_item_order_id
+select order_item_order_id,sum(order_item_subtotal) order_revenue
+from order_items
+group by order_item_order_id
+limit 10;
+--http://m02.itversity.com:19088/proxy/application_1658918988971_65369/
+
+--always use the leading key as part of the distribute by clause in case of composite group by keys
+--where global sort is not needed for example data sorted within sate in us but all the states are not required to sort in ascending order then we can say distribute by state and sort by some other condition, local sorting will use multiple reducers when compared with 
+--global sorting so performance will be better.If we want to change field during group by then using distribute by we can do it.  
+select order_item_order_id,sum(order_item_subtotal) order_revenue
+from order_items
+group by order_item_order_id
+distribute by order_item_order_id
+limit 10;
+
+--sort by is alternative to order by which is useful to sort data within groups which are obtained by distribute by 
 create database goutham_nyse location 'hdfs://m01.itversity.com:9000/user/itv000613/db/nyse';
 use goutham_nyse;
 
@@ -199,10 +223,15 @@ create table stocks_eod_orderby (
  volume bigint
  ) row format delimited fields terminated by ',';
 
+truncate table stocks_eod_orderby;
+
+set mapreduce.job.reduces=8;
 insert into stocks_eod_orderby
 select * from stocks_eod
 order by tradedate,volume desc;
 
+
+--when we use sort by data we need to use distribute by or else data will be randomly distributed.
 create table stocks_eod_sortby (
  stockticker STRING,
  tradedate int,
@@ -213,47 +242,92 @@ create table stocks_eod_sortby (
  volume bigint
  ) row format delimited fields terminated by ',';
 
+--if we want to use sort within a key then distribute by and sort by have to be used instead of order by.
+--we want to sort the data the data by tradedate then we have to mention it in the sort by or else data will be skewed.
+--for same set of data sort by key completes quickly than order by key because number of reducers are more.
 insert into table stocks_eod_sortby
 select * from stocks_eod
 distribute by tradedate sort by tradedate,volume desc;
  
 describe formatted stocks_eod_sortby;
-if we want to use sort within a key then distribute by and sort by have to be used instead of order by.
+hadoop fs -get hdfs://m01.itversity.com:9000/user/itv000613/db/nyse/stocks_eod_sortby .
 
---come back for 0 records.
+--if we want to use single column to distribute by and perform sort within same key then we can replace both with one cluster by which sorts data in ascending order
+--but we cant change the sorting order.
+drop table stocks_eod_clusterby;
 create table stocks_eod_clusterby
 row format delimited fields terminated by ','
 as 
 select * from stocks_eod
 cluster by tradedate; 
 
---using joins and set operations.
+--verification of the output: awk -F ',' '{print $2}' 000000_0 | uniq 
 
+--using joins and set operations.
+--nested sub query
+
+select * from orders limit 10;
+--select * from (nested sub query) limit 10; we have to provide alias for the nested subquery to work in hive.
+--output of subquery is stored into q which is further used in the from clause for outer query.
+select * from (select * from orders)q limit 10; 
+
+
+/* 
+1.create and load the data into wordcount table
+2.select split(s,' ') from wordcount; returns array of strings for the words within each line
+3.select explode((split(s,' '))) from wordcount; returns individual words from array of strings
+4.As we are unable to give explode on group by clause we have to take nested query approach for grouping data and generating counts
+5.using with clause(see more examples on it) we can define a variable(q) globally for results of nested query and it can be used to perform any operations like grouping in 
+main query.  
+*/ 
 with q as 
 (select explode(split(s, ' ')) as word from wordcount)
 select word,count(1) from q
 group by word;
 
+--select is a keyword in hql 
+--get all the orders that are in orders but not in order_items using NOT and IN operator
+--we have to write sub query to get order_item_order_id from order_items then use it in where clause 
+--of the main query.why alias is not used here? is it only in cases like we have to use in from 
+--we can use joins instead of these operators for better performance.  
 select * from orders
 where order_id not in (select order_item_order_id from order_items)
 limit 10;
 
+--get all the orders that are in order_items.
 select * from orders
 where order_id in (select order_item_order_id from order_items)
 limit 10;
 
+--with exists we have to use correlated sub query as we are like doing join on orders orderid with order_items order_item_order_id
+--we are checking all rows from order_items where oi.order_items_order_id = o.order_id then selecting orders that exists in order_items.
 select * from orders 
 where exists (
  select 1 from order_items
-  where order_items.order_item_order_id = orders.order_id)
+ where order_items.order_item_order_id = orders.order_id)
 limit 10;
 
+--we are checking all rows from order_items where oi.order_items_order_id = o.order_id then selecting orders that don't exist in order_items.
+select * from orders o
+where not exists(
+    select 1 from order_items
+    where order_item_order_id = o.order_id
+) limit 10;
+
+--joins 
+--in transactional databases we will be using normalized data model where data will be stored in many tables, 
+--if it is data warehouse applications then we will be storing data in star and snowflake schema where data will be denormalized into fewer tables 
+--to serve the reports.earlier we have seen to check if data exists or not exists in other table based on one column but if we 
+--want to get data from both tables to serve some report then we have to join both the datasets then only we can get data for both datasets.   
+--legacy syntax vs ascii join syntax(below), to collab(combine) data from multiple tables we will be using joins.
 select t1.*,t2.* from table t1 [OUTER] JOIN table t2
 on t1.id = t2.id
 where filters;
 
---the relation between orders and order_items is 1 to many meaning each and 
---every record in order item has corresponding entry in orders and no record only in order_items but not in orders
+--inner join 
+--these both are parent and child tables.
+--the relation between orders and order_items is 1 to many meaning each and every record in order item 
+--has corresponding entry in orders and no record only in order_items but not in orders
 select o.order_id,o.order_date,o.order_status,
     oi.order_item_product_id,oi.order_item_subtotal
 from orders o INNER JOIN order_items oi
@@ -261,7 +335,6 @@ on o.order_id = oi.order_item_order_id
 limit 10;
 
 --returns all the mathcing records for a key in child table 
-
 select count(1) from 
 orders o INNER JOIN order_items oi
 on o.order_id = oi.order_item_order_id;
@@ -403,8 +476,7 @@ select 'orders_2013_09_to_2013_12',count(1) from orders_2013_09_to_2013_12;
 
 select order_id,order_date,order_status from orders_2013_08_to_2013_11
 union 
-select order_id,order_date,order_status from orders_2013_09_to_2013_12
-;
+select order_id,order_date,order_status from orders_2013_09_to_2013_12;
 
 select * from (
 select order_id,order_date,order_status from orders_2013_08_to_2013_11
@@ -419,6 +491,7 @@ select order_id,order_date,order_status from orders_2013_09_to_2013_12
 ) q;
 
 --there is no out of box support for intersection and minus 
+
 
 
 
