@@ -1,6 +1,12 @@
+--ssh -o ServerAliveInterval=600 itv000613@g01.itversity.com
+-- touch ~/.ssh/config
+-- chmod 600 ~/.ssh/config
+-- echo "ServerAliveInterval 600" >> ~/.ssh/config
+
 --ssh itv000613@g01.itversity.com u4onzoojuje9rf88fwo4dlfz6vinhe0r
 use gouthamkumar_retail;
 hive --database gouthamkumar_retail
+
 
 --we have to understand orders,order_items and products tables
 --In order_items order_item_subtotal = order_item_quantity * order_item_product_price
@@ -325,46 +331,74 @@ on t1.id = t2.id
 where filters;
 
 --inner join 
---these both are parent and child tables.
---the relation between orders and order_items is 1 to many meaning each and every record in order item 
---has corresponding entry in orders and no record only in order_items but not in orders
+--orders and order_items both are parent and child tables.order_id is the primary key and order_item_order_id is the foriegn key
+--In hive we can't enforce these constraints but we can do it in source db
+--the relation between orders and order_items is 1 to many meaning each and every record in order_items for order_item_order_id  
+--has corresponding entry for orderid in orders and no record only in order_items but not in orders
+--as order_items had 3 records with order_id 2 it returned all the three records.
 select o.order_id,o.order_date,o.order_status,
     oi.order_item_product_id,oi.order_item_subtotal
 from orders o INNER JOIN order_items oi
 on o.order_id = oi.order_item_order_id
 limit 10;
 
---returns all the mathcing records for a key in child table 
+--returns all the mathcing records for a key in child table(172198)
 select count(1) from 
 orders o INNER JOIN order_items oi
 on o.order_id = oi.order_item_order_id;
 
+--query to join multiple tables in hive, here t2 is child table for t1 and t3 tables.
 SELECT * FROM 
 TABLE1 T1 join table t2
 on t1.key = t2.related_key
 join table3 on t3.key = t2.related_t3_key 
 
 --count will be less than total records in child table as we are applying the filter condition.
+--here we are trying to get all the orders with complete and closed status only 
+-- In retail_db depts,categories,products if we want to get revenue per department or products we have to join orders,order_items,products,categories and departments.
 select o.order_id,o.order_date,o.order_status,
     oi.order_item_product_id,oi.order_item_subtotal
-from orders o INNER JOIN order_items oi
+from orders o JOIN order_items oi
 on o.order_id = oi.order_item_order_id
-where o.order_status in('COMPLETE','CLOSED')
+where o.order_status IN ('COMPLETE','CLOSED')
 limit 10;
 
+--here the count will be less than 172198 which is 75408 as we are only getting complete and closed orders.
+select count(1)
+from orders o JOIN order_items oi
+on o.order_id = oi.order_item_order_id
+where o.order_status IN ('COMPLETE','CLOSED');
+
+--68883
+select count(distinct order_id) from orders;
+
+--there are some orders for which order_items doesn't exist so count will be less than 68883 as inner join will skip those records(57431)
+-- there are only 57431 unique orders which has corresponding order_items.
 select count(distinct o.order_id)
 from orders o join order_items oi
 on o.order_id = oi.order_item_order_id;
 
--- for left outer join we need to see all records present in order_items for a given order id and 
---if no records are present then we have to replace them with nulls.
+
+--we have to join both the datasets and if we don't have any entry like order_items for a given 
+--orderid then we should get that data as well.
+
+--for left outer join we need to see all records present in order_items for a given order id and 
+--if no records are present then we are given with null values.
+
+--based on column in left table we are getting all the records in right table and if any of the doesn't exist 
+--then replace with nulls.
+
+--parent table orders doesn't have any duplicates.
+
 select o.order_id,o.order_date,o.order_status,
     oi.order_item_product_id,oi.order_item_subtotal
 from orders o left outer JOIN order_items oi
-on o.order_id = oi.order_item_order_id;
+on o.order_id = oi.order_item_order_id
+limit 10;
 
---it returns all the rows in orders.
-select count(1)
+--68883
+--it returns all the rows in orders.(183650)
+select count(distinct o.order_id)
 from orders o left outer JOIN order_items oi
 on o.order_id = oi.order_item_order_id;
 

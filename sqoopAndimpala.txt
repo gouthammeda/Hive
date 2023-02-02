@@ -1,0 +1,266 @@
+--ssh itv000613@g01.itversity.com
+--we are genrating the keys
+ssh-keygen
+ls -ltr ~/.ssh
+--we are copying the keys to edgenode
+ssh-copy-id itv000613@g01.itversity.com
+
+mysql -u retail_user -h ms.itversity.com -p itversity
+mysql -u nyse_user -h ms.itversity.com -p itversity
+
+--list-databases
+sqoop list-databases \
+--connect jdbc:mysql://ms.itversity.com \
+--username retail_user \
+--password itversity 
+
+sqoop list-tables \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+-P
+
+//getting sample results using query.
+sqoop eval \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+--query "select * from orders limit 10"
+
+sqoop eval \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+-e "describe orders"
+
+sqoop eval \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+-e "select * from orders limit 10" 1>query.out 2>query.error
+
+sqoop import \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+--table orders \
+--target-dir /user/itv000613/sqoop_import/retail_db/orders
+
+sqoop import \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+--table order_items \
+--warehouse-dir /user/itv000613/sqoop_import/retail_db
+
+//ways of writing to the output directory in hdfs.
+sqoop import \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+--table order_items \
+--warehouse-dir /user/itv000613/sqoop_import/retail_db \
+--append
+
+//come back later to see it.
+sqoop import \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+--table order_items \
+--warehouse-dir /user/itv000613/sqoop_import/retail_db \
+--delete-target-dir
+
+sqoop import \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+--table order_items \
+--warehouse-dir /user/itv000613/sqoop_import/retail_db \
+--delete-target-dir 1>import.out 2>import.err
+
+all the logs are given out to import.err
+mapred job -status job_1658918988971_46138
+
+sqoop import \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+--table order_items \
+--warehouse-dir /user/itv000613/sqoop_import/retail_db \
+--delete-target-dir \
+--num-mappers 8 
+
+sqoop eval \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+-e "describe order_items"
+
+Different file formats 
+sqoop import \
+-Dmapreduce.job.classloader=true \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+--table order_items \
+--warehouse-dir /user/itv000613/sqoop_import/retail_db \
+--delete-target-dir \
+--as-avrodatafile
+
+sqoop import \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+--table order_items \
+--warehouse-dir /user/itv000613/sqoop_import/retail_db \
+--delete-target-dir \
+--as-sequencefile
+
+avro-tools 
+avro-tools getschema part-m-00000.avro
+avro-tools tojson part-m-00000.avro | more 
+avro-tools tojson part-m-00000.avro >> part-m-00000.json
+avro-tools tojson part-m-00001.avro >> part-m-00001.json
+avro-tools tojson part-m-00002.avro >> part-m-00002.json
+avro-tools tojson part-m-00003.avro >> part-m-00003.json
+wc -l part-m-0000*.json
+
+sqoop import \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+--table order_items \
+--warehouse-dir /user/itv000613/sqoop_import/retail_db \
+--delete-target-dir \
+--compress
+
+vi core-site.xml hit compress to locate the compression codecs available.
+
+sqoop import \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+--table order_items \
+--warehouse-dir /user/itv000613/sqoop_import/retail_db \
+--delete-target-dir \
+--compress \
+--compression-codec org.apache.hadoop.io.compress.SnappyCodec
+
+//sqoop help import 
+we can specify the list of columns to use for importing.
+sqoop import \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+--table customers \
+--columns customer_id,customer_fname,customer_lname,customer_street,customer_city,customer_state,\
+customer_zipcode \
+--warehouse-dir /user/itv000613/sqoop_import/retail_db \
+--delete-target-dir
+
+sqoop import \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+--table order_items \
+--warehouse-dir /user/itv000613/sqoop_import/retail_db \
+--boundary-query "SELECT 1,172198" \
+--delete-target-dir 
+
+sqoop eval \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+-e "select * from orders where order_status IN('COMPLETE','CLOSED') AND order_date like '2013-08%'"
+
+sqoop import \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+--table orders \
+--warehouse-dir /user/itv000613/sqoop_import/retail_db \
+--delete-target-dir \
+--where "order_status IN('COMPLETE','CLOSED') AND order_date like '2013-08%'"
+
+//split by can be also used if you want to split some other column than primary key.
+sqoop import \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+--table order_items \
+--warehouse-dir /user/itv000613/sqoop_import/retail_db \
+--delete-target-dir \
+--split-by order_item_order_id 
+
+//Getting results from source db using query approach 
+sqoop import \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+--query "select order_date,count(1) order_count from orders \
+	WHERE \$CONDITIONS \
+	group by order_date" \
+--target-dir /user/itv000613/sqoop_import/retail_db \
+--split-by order_date \
+--delete-target-dir
+
+sqoop import \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+--query "select order_date,count(1) order_count from orders \
+	WHERE \$CONDITIONS \
+	group by order_date" \
+--target-dir /user/itv000613/sqoop_import/retail_db \
+--num-mappers 1 \
+--delete-target-dir
+
+sqoop eval \
+--connect jdbc:mysql://ms.itversity.com:3306/nyse_db \
+--username nyse_user \
+--password itversity \
+-e "SHOW tables"
+
+sqoop eval \
+--connect jdbc:mysql://ms.itversity.com:3306/nyse_db \
+--username nyse_user \
+--password itversity \
+-e "describe stock_eod"
+
+primary key is unique but indexed data need not be unique 
+using split by for composite key then leading col to left should be specified in the split by clause 
+
+sqoop import \
+-Dorg.apache.sqoop.splitter.allow_text_splitter=true \
+--connect jdbc:mysql://ms.itversity.com:3306/nyse_db \
+--username nyse_user \
+--password itversity \
+--table stock_eod \
+--warehouse-dir /user/itv000613/sqoop_import/nyse \
+--delete-target-dir 
+
+sqoop eval \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+-e "describe order_items_nopk"
+
+sqoop import-all-tables \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--driver com.mysql.jdbc.Driver \
+--username retail_user \
+--password itversity \
+-m 1 \
+--warehouse-dir '/user/itv000613/sqoop_import/retail_db'
+
+
+
+
+
+
+
+
+
+
+
+

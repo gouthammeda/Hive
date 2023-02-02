@@ -317,7 +317,11 @@ DESCRIBE function nvl;
 select nvl(1,0);
 select nvl(NULL,0);
 
---word count using split to convert them into individual records then explode() is used to split them into individual records then applying group by to get them into word,count format. 
+/*1.create and load the data into wordcount table
+2.select split(s,' ') from wordcount; returns array of strings for the words within each line
+3.select explode((split(s,' '))) from wordcount; returns individual words from array of strings
+4.As we are unable to give explode on group by clause we have to take nested query approach for grouping data and generating counts
+*/ 
 create table wordcount(s STRING);
 INSERT INTO wordcount VALUES
   ('Hello World'),
