@@ -373,7 +373,7 @@ where o.order_status IN ('COMPLETE','CLOSED');
 select count(distinct order_id) from orders;
 
 --there are some orders for which order_items doesn't exist so count will be less than 68883 as inner join will skip those records(57431)
--- there are only 57431 unique orders which has corresponding order_items.
+--there are only 57431 unique orders which has corresponding order_items.
 select count(distinct o.order_id)
 from orders o join order_items oi
 on o.order_id = oi.order_item_order_id;
@@ -389,105 +389,138 @@ on o.order_id = oi.order_item_order_id;
 --then replace with nulls.
 
 --parent table orders doesn't have any duplicates.
-
 select o.order_id,o.order_date,o.order_status,
     oi.order_item_product_id,oi.order_item_subtotal
 from orders o left outer JOIN order_items oi
 on o.order_id = oi.order_item_order_id
 limit 10;
 
---68883
---it returns all the rows in orders.(183650)
+--it returns all the rows in orders(68883), even though there is no corresponding entry for orders in 
+--order_items we will get all the orders.
 select count(distinct o.order_id)
 from orders o left outer JOIN order_items oi
 on o.order_id = oi.order_item_order_id;
 
---order_item_id is primary key means it is not null and also unique 
+
+--get all the records in one table that are not present in another table
+--we have to consider the not null fields to compare with is null so we can go with order_item_order_id or 
+--order_item_id as it is primary key which means it is not null and also unique
+/*satisfying null condition 
+1.one is if there is no corresponding record in order_items
+2.order_item_id is null.*/
+
+--first 10 orders where there is no corresponding order_items
+--instead of not in where it launched 4 map jobs join uses only one map job.
 select o.*
 from orders o left outer JOIN order_items oi
 on o.order_id = oi.order_item_order_id
 where oi.order_item_id is null 
 limit 10;
 
---no of orders which doesn't have corresponding order_items is 11452
---i.e.,total elements which are present in one dataset but not in other
+-- no of orders which doesn't have corresponding order_items, like total elements which are present in one dataset but not in other are 11452 rows. 
 select count(1)
 from orders o left outer JOIN order_items oi
 on o.order_id = oi.order_item_order_id
 where oi.order_item_id is null; 
 
---for right outer join this query also results in 11452 rows
+--based on the side of the table we could specify right or left join here orders is on right side which is the parent table hence it is the right outer join 
+select oi.*
+from order_items oi right outer join orders o
+on o.order_id = oi.order_item_order_id
+limit 10;
+
+--for right outer join this query also results in 11452 rows(look more examples)
 select count(1)
 from order_items oi right outer join orders o
 on o.order_id = oi.order_item_order_id
 where oi.order_item_id is null;
 
---no record only in order_items but not in orders so count is 0.
+--for each and every order_items there is corresponding orders and no scenario where we will get records only in order_items but not in orders so count is 0.
+--for data quality any order_items which are not in orders.
+--here we can change the table names side if needed or else this works fine 
 select count(1)
 from orders o right outer join order_items oi
 on o.order_id = oi.order_item_order_id
 where o.order_id is null;
 
---full outer join same as left outer join union right outer join
---there is no such record where orders entries are null and only order_item are available
+--full outer join same as A left outer join B union A right outer join B.
+--there can be few records that are in A and not in B with null values in B and records that are in B but not in A with null values in A.
+--there is no such record where orders entries are null and are available only in order_items.
 select o.order_id,o.order_date,o.order_status,
   oi.order_item_product_id, oi.order_item_subtotal
 from orders o full outer join order_items oi
 on o.order_id = oi.order_item_order_id
 limit 100;   
 
---default join is reduce side join 
+--set hive.auto.convert.join=true;
+--hive.mapjoin.smalltable.filesize = 25000000; 250MB 
 select o.order_id,o.order_date,o.order_status,
     oi.order_item_product_id,oi.order_item_subtotal
 from orders o JOIN order_items oi
 on o.order_id = oi.order_item_order_id
 limit 10;
 
-set hive.auto.convert.join=true;
-hive.mapjoin.smalltable.filesize = 25000000; 250MB
+--set hive.auto.convert.join=false;
+--default join is reduce side join
+select o.order_id,o.order_date,o.order_status,
+    oi.order_item_product_id,oi.order_item_subtotal
+from orders o JOIN order_items oi
+on o.order_id = oi.order_item_order_id
+limit 10;
+--Total MapReduce CPU Time Spent: 8 seconds 250 msec which is high when compared with map side joins.
 
---using the legacy approach 
+
+--using the legacy or non-ascii approach 
 select o.order_id,o.order_date,o.order_status,
     oi.order_item_product_id,oi.order_item_subtotal
 from orders o, order_items oi
-where o.order_id = oi.order_item_order_id;
+where o.order_id = oi.order_item_order_id
+limit 10;
 
 --cartesian 
+--68883*172198=11861514834 rows. 
 --for each record in order there will be 172
 select o.order_id,o.order_date,o.order_status,
     oi.order_item_product_id,oi.order_item_subtotal
 from orders o cross join order_items oi
-limit 10;
+limit 100;
 
+select count(1) from orders o cross join order_items oi;
 
---union is supported but intersection and minus are not supported
+--union is supported but intersection and minus are not supported but is acheived using join or not in,not exists operators.
+--union all the elements in both datasets
+--intersection is common elements in datasets 
+--minus is exists in one dataset but not in other.
+
+--creating table from orders data from aug 1st to nov 30th.
 create table orders_2013_08_to_2013_11
 row format delimited fields terminated by ','
 as 
 select * from orders 
-where order_date >= '2013-08-01 00:00:00.0' and 
-      order_date <= '2013-11-30 00:00:00.0'; 
+where order_date >= '2013-08-01 00:00:00.0' and order_date <= '2013-11-30 00:00:00.0'; 
 
+--get count of all dates between aug 1st and Nov 30th 
 select order_date,count(1) from orders_2013_08_to_2013_11
 group by order_date;
 
---GETTING count of all dates based on months
+--get count of all dates based on months for orders_2013_08_to_2013_11 table
 select date_format(order_date,'YYYYMM'),COUNT(1)
 from orders_2013_08_to_2013_11
 group by date_format(order_date,'YYYYMM');
 
---validating that counts are matching
+--verifying that counts are matching with orders table 
 select date_format(order_date,'YYYYMM'),COUNT(1)
 from orders
 group by date_format(order_date,'YYYYMM');
 
+--creating table from orders data from sep 1st to Dec 31st.
 create table orders_2013_09_to_2013_12
 row format delimited fields terminated by ','
 as
 select * from orders 
-where order_date >= '2013-09-01 00:00:00.0' and
-      order_date <= '2013-12-31 00:00:00.0';
+where order_date >= '2013-09-01 00:00:00.0' and order_date <= '2013-12-31 00:00:00.0';
 
+--get counts of dates for months between september to December.
 select date_format(order_date,'YYYYMM'),COUNT(1)
 from orders_2013_09_to_2013_12
 group by date_format(order_date,'YYYYMM');
