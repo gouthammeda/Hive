@@ -462,13 +462,12 @@ limit 10;
 
 --set hive.auto.convert.join=false;
 --default join is reduce side join
+--Total MapReduce CPU Time Spent: 8 seconds 250 msec which is high when compared with map side joins.
 select o.order_id,o.order_date,o.order_status,
     oi.order_item_product_id,oi.order_item_subtotal
 from orders o JOIN order_items oi
 on o.order_id = oi.order_item_order_id
 limit 10;
---Total MapReduce CPU Time Spent: 8 seconds 250 msec which is high when compared with map side joins.
-
 
 --using the legacy or non-ascii approach 
 select o.order_id,o.order_date,o.order_status,
@@ -487,6 +486,7 @@ limit 100;
 
 select count(1) from orders o cross join order_items oi;
 
+--set operations
 --union is supported but intersection and minus are not supported but is acheived using join or not in,not exists operators.
 --union all the elements in both datasets
 --intersection is common elements in datasets 
@@ -525,64 +525,45 @@ select date_format(order_date,'YYYYMM'),COUNT(1)
 from orders_2013_09_to_2013_12
 group by date_format(order_date,'YYYYMM');
 
---union we need to have same datatypes between the columns 
---union distinct removes duplicate records before performing union operation.
-select c1,c2,c3 from table1
-union 
-select e1,e2,e3 from table2
-union 
-select f1,f2,f3 from table3;
+--union we need to have same number of columns between datasets and datatypes have to match between the columns 
+-- select c1,c2,c3 from table1
+-- union 
+-- select e1,e2,e3 from table2
+-- union 
+-- select f1,f2,f3 from table3;
 
+--if there are two queries then it will trigger three map reduce jobs.
 select count(1) from orders_2013_08_to_2013_11
 union all 
 select count(1) from orders_2013_09_to_2013_12;
 
+--it will give the table names and their corresponding counts with 3 mr jobs 
 select 'orders_2013_08_to_2013_11',count(1) from orders_2013_08_to_2013_11
 union 
 select 'orders_2013_09_to_2013_12',count(1) from orders_2013_09_to_2013_12;
 
+--we are performing the union operation on order_id,order_date and order_status columns from both the tables.
+--only one mr job is launched to perform union between two tables.
+--union distinct removes duplicate records before performing union operation.(29939)
 select order_id,order_date,order_status from orders_2013_08_to_2013_11
 union 
 select order_id,order_date,order_status from orders_2013_09_to_2013_12;
 
+--It gets more rows when compared with union as it will get all duplicates(46686).
+select order_id,order_date,order_status from orders_2013_08_to_2013_11
+union all
+select order_id,order_date,order_status from orders_2013_09_to_2013_12;
+
+--get the first 10 records after performing the union using nested query approach 
 select * from (
 select order_id,order_date,order_status from orders_2013_08_to_2013_11
 union 
 select order_id,order_date,order_status from orders_2013_09_to_2013_12    
 ) q limit 10;
 
+--get the counts after performing the union all operation using nested query approach.
 select count(1) from (
 select order_id,order_date,order_status from orders_2013_08_to_2013_11
 union all
 select order_id,order_date,order_status from orders_2013_09_to_2013_12    
-) q;
-
---there is no out of box support for intersection and minus 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+) q; 
