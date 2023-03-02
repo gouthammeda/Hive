@@ -334,14 +334,3 @@ select word,count(1)
 from 
  (select explode(split(s,' ')) as word from wordcount)q
  group by word;
-
-
-
-
-
-
-
-
-
-
-
